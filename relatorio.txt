@@ -1,0 +1,64 @@
+Rodrigo Leal 2510091
+
+RELATORIO - Gerador Dinamico de Funcoes (cria_func)
+===================================================
+
+1. VISAO GERAL
+--------------
+A funcao cria_func gera, em tempo de execucao, o codigo de maquina x86-64
+(Linux, System V ABI) de uma "nova versao" da funcao f. O codigo gerado:
+  - executa o prologo (push %rbp; mov %rsp,%rbp), realinhando a pilha em
+    multiplo de 16, o que permite chamar funcoes de biblioteca;
+  - coloca os argumentos nos registradores %rdi, %rsi, %rdx conforme a
+    descricao em params (PARAM repassado, FIX constante, IND valor corrente
+    de uma variavel);
+  - chama f com call indireto (movabs $f,%rax; call *%rax);
+  - desfaz o registro de ativacao (leave) e retorna (ret), preservando o
+    valor de retorno de f em %rax/%eax.
+
+Os argumentos sao escritos do ultimo para o primeiro para nao sobrescrever
+um registrador de argumento recebido (PARAM) antes de copia-lo ao destino.
+
+2. AMBIENTE DE TESTE
+--------------------
+Compilacao:
+    gcc -Wall -Wa,--execstack -o teste cria_func.c teste.c
+Execucao: ./teste
+(A opcao --execstack e necessaria para executar o codigo armazenado no
+vetor "codigo", que fica na area de dados.)
+
+3. TESTES REALIZADOS (todos com sucesso)
+----------------------------------------
+T1  identidade [PARAM]            -> nova(7)=7, nova(-5)=-5      OK
+T2  identidade [FIX=42]           -> nova()=42                  OK
+T3  identidade [IND=&v]           -> reflete valor corrente de v OK
+T4  mult [PARAM, FIX=10]          -> nova(i)=i*10  (exemplo 1)   OK
+T5  mult [IND=&i, FIX=10]         -> nova()=i*10   (exemplo 2)   OK
+T6  mult [FIX=10, PARAM]          -> nova(i)=10*i                OK
+T7  soma3 [FIX=1000, PARAM, PARAM]-> nova(a,b)=1000+a+b          OK
+T8  soma3 [PARAM, FIX=100, IND=&z]-> nova(a)=a+100+z             OK
+T9  memcmp [FIX=fixa, PARAM, PARAM] (exemplo "mesmo_prefixo")    OK
+
+Casos especialmente relevantes:
+  - T6 e T7 verificam o caso critico em que parametros PARAM precisam ser
+    deslocados de (rdi,rsi) para (rsi,rdx). A copia "de tras para frente"
+    evita que a amarracao do primeiro argumento destrua o valor recebido.
+  - T3, T5 e T8 verificam IND: o valor lido e sempre o valor CORRENTE da
+    variavel no momento da chamada (a leitura ocorre dentro do codigo
+    gerado, nao em cria_func).
+  - T9 cobre PTR_PAR (ponteiros de 64 bits) e a chamada a uma funcao de
+    biblioteca (memcmp), exercitando o alinhamento de pilha.
+
+Resultado da execucao:  19 OK, 0 FALHAS.
+
+4. O QUE FUNCIONA / LIMITACOES
+------------------------------
+- Funcionam todas as combinacoes de 1 a 3 parametros com origens
+  PARAM, FIX e IND, e tipos INT_PAR e PTR_PAR.
+- Limitacao prevista pelo enunciado: minimo 1 e maximo 3 parametros.
+- Nao tratamos parametros de ponto flutuante (nao exigido).
+
+5. O QUE NAO FUNCIONA
+---------------------
+- Nenhum problema conhecido nos casos testados.
+  (Se houver algum, descreva aqui.)
